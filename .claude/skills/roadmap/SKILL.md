@@ -110,19 +110,23 @@ The default milestones are **Now / Next / Later / Done** (Now-Next-Later format)
 2. Move it to Done
 3. Add `Shipped` date and `PR` column reference (ask user for PR # if it can't be inferred)
 
-## Linking to GitHub Issues
+## Linking to Jira Tickets
 
-If the user passes `--with-issues`, also create or update GitHub Issues to mirror the roadmap:
+If the user passes `--with-issues`, also create or update Jira tickets to mirror the roadmap:
 
-```bash
-# For each item in Now and Next without a GH link in Notes:
-gh issue create \
-  --title "[Roadmap] {item}" \
-  --body "Tracking issue for roadmap item {RM-NNN}" \
-  --label "roadmap,{priority}"
+```
+For each item in Now and Next without a Jira key in Notes:
+  mcp__sb-jira-flow__create_ticket({
+    title: "[Roadmap] {item}",
+    type: "feature",
+    description: "Tracking ticket for roadmap item {RM-NNN}",
+    acceptance_criteria: ["Roadmap item {RM-NNN} delivered"],
+    component: "{component from the project registry or the user}",
+    labels: ["roadmap", "{p0|p1|p2}"]
+  })
 ```
 
-Then write the issue number back into the Notes column.
+Then write the Jira key (e.g. `SMASH-123`) back into the Notes column.
 
 ## Output format (show)
 
@@ -133,7 +137,7 @@ ROADMAP — example-app — last updated 2026-04-06
 NOW (current cycle)
 | ID     | Item            | Priority | Status      | Owner  | Notes                |
 |--------|-----------------|----------|-------------|--------|----------------------|
-| RM-001 | CSV export      | P0       | in-progress | @alice | GH#42                |
+| RM-001 | CSV export      | P0       | in-progress | @alice | SMASH-42             |
 | RM-002 | OAuth login     | P0       | not-started | @bob   | depends on AgDR-0007 |
 
 NEXT (1–3 cycles out)

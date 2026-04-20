@@ -172,10 +172,10 @@ Default is merge. Record the choice.
 Rationale for diverging from the `#58` AC wording ("leaves updated local main"): apexyard's own `block-main-push.sh` hook blocks direct pushes to `main` and also blocks commits made while on `main`. A merge with conflicts requires a `git commit` to finalise, which would be blocked. A sync branch sidesteps both issues and is the same shape the project uses for all other changes.
 
 ```bash
-# Find or create a tracking issue. If a recent "sync" issue is open, reuse its number.
-# Otherwise prompt the user to create one (or offer to create it via `gh issue create`).
+# Find or create a tracking Jira ticket. If a recent "sync" ticket is open, reuse its key.
+# Otherwise prompt the user to create one via /task.
 
-BRANCH="chore/#${TICKET}-sync-upstream-apexyard"
+BRANCH="chore/${TICKET}-sync-upstream-apexyard"
 git checkout -b "$BRANCH"
 ```
 
@@ -296,7 +296,7 @@ Skill done. No remote state changed.
 | Network failure on fetch | Warn, exit 1 — don't proceed on stale refs |
 | User chose rebase but has 50+ local commits | Warn about rewriting many SHAs, re-confirm |
 | Merge conflict the user aborts | Restore original branch state, delete sync branch, exit 1 |
-| Tracking issue for the sync doesn't exist | Offer to create one via `gh issue create`, get number, continue |
+| Tracking Jira ticket for the sync doesn't exist | Offer to create one via `/task`, get the Jira key, continue |
 
 ## Design notes
 

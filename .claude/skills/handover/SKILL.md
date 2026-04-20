@@ -67,9 +67,18 @@ ls <repo>/.github/workflows/ 2>/dev/null
 git -C <repo> log -1 --format='%h %ai %an %s'
 git -C <repo> shortlog -sn --no-merges | head -10
 
-# Open issues / PRs (if it's a GitHub repo)
-gh -R <owner/name> issue list --state open --json number,title,labels --limit 10
+# Open PRs (GitHub — always)
 gh -R <owner/name> pr list --state open --json number,title --limit 10
+
+# Open Jira tickets for this project (if a ticket_prefix will be assigned)
+# Skip on the initial assessment run — prompt for the prefix during registry-append
+# and then surface ticket counts on the next /handover pass.
+# Example JQL once <PREFIX> is known:
+#   curl -sf -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" -H "Accept: application/json" \
+#     --data-urlencode "jql=project = <PREFIX> AND statusCategory != Done" \
+#     --data-urlencode "fields=summary,priority" \
+#     --data-urlencode "maxResults=10" \
+#     --get "${JIRA_BASE_URL}/rest/api/3/search"
 ```
 
 ### 3. Detect the tech stack

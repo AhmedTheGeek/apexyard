@@ -29,10 +29,10 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Your Company Name"
-  mission: "What you're building and why"
-  vision: "Where you're headed long-term"
-  website: "https://yourcompany.com"
+  name: "Awesome Motive"
+  mission: "Build WordPress plugins and tools used by 30M+ websites"
+  vision: "Make the web simpler and more powerful for every creator and business"
+  website: "https://awesomemotive.com"
 
   # Core values that guide decision-making
   values:
@@ -42,8 +42,8 @@ company:
 
   # What kind of software you build
   products:
-    - name: "Main Product"
-      description: "Brief description of what it does"
+    - name: "Smash Balloon"
+      description: "Social media feed plugins for WordPress"
       type: "web-app"  # web-app, mobile-app, api, cli, library, saas
 
 # -----------------------------------------------------------------------------
@@ -110,14 +110,25 @@ tech_stack:
 # -----------------------------------------------------------------------------
 # Project Management
 # -----------------------------------------------------------------------------
+# Tickets live in Jira. Code, PRs, and CI stay on GitHub.
+# Branch names, PR titles, and commit trailers reference Jira keys
+# (e.g. feature/SMASH-123-slug, fix(SMASH-58): ...).
+#
 project_management:
-  tool: "GitHub Issues"           # GitHub Issues, Linear, Jira, etc.
+  tool: "Jira"
+  workspace_url: "https://awesomemotive.atlassian.net"
+  board_url: "https://awesomemotive.atlassian.net/jira/software/c/projects/SMASH/boards/102"
   sprint_duration: "1 week"       # Sprint/cycle length
   branching_strategy: "feature-branch"  # feature-branch, gitflow, trunk-based
 
-  # Ticket ID prefix (used in branch names and PR titles)
-  # Examples: "GH" for GitHub Issues (#42), "PROJ" for Jira (PROJ-42)
-  ticket_prefix: "GH"
+  # Default Jira project key for this ops repo. Managed projects in
+  # apexyard.projects.yaml can override via their own `ticket_prefix`.
+  ticket_prefix: "SMASH"
+
+  # Environment variables the shell hooks expect (set in your shell profile):
+  #   JIRA_EMAIL       Your Atlassian account email (e.g. you@company.com)
+  #   JIRA_API_TOKEN   Token from id.atlassian.com/manage-profile/security/api-tokens
+  #   JIRA_BASE_URL    Optional override; defaults to workspace_url above
 
 # -----------------------------------------------------------------------------
 # Quality Standards
@@ -160,5 +171,5 @@ workflows:
 #
 communication:
   primary: "Slack"                # Slack, Discord, Teams, etc.
-  documentation: "GitHub Wiki"    # GitHub Wiki, Notion, Confluence, etc.
+  documentation: "Confluence"     # Awesome Motive uses Atlassian Confluence
   design: "Figma"                 # Figma, Sketch, code-first, etc.

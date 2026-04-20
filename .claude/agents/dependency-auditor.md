@@ -150,7 +150,7 @@ Check for:
 
 ## Ticket Integration
 
-When critical or high vulnerabilities are detected, create a tracking ticket. The default is **GitHub Issues** in the project's own repo via `gh issue create`. Teams using a different tracker (Linear, Jira, etc.) can substitute the equivalent command.
+When critical or high vulnerabilities are detected, create a tracking ticket via the `/task` skill (or call `mcp__sb-jira-flow__create_ticket` directly). Tickets land in the Jira project configured in `onboarding.yaml` (`project_management.ticket_prefix`, default `SMASH`). Apply the `security` and `dependencies` labels plus the priority label matching the severity.
 
 **Vulnerability Ticket Template**:
 

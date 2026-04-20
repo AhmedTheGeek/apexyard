@@ -96,7 +96,7 @@ Work on ONE ticket at a time. Complete fully before starting next. Each PR = one
 - **Lint, typecheck, test, build** must pass before pushing
 - **Code review required** before merge
 - **Explicit per-PR CEO approval required for every merge** -- plan-level "go" / "continue" / "ship it" does NOT authorize any `gh pr merge`. Stop before each merge and ask for a per-PR explicit nod. Mechanically enforced by `block-unreviewed-merge.sh` + the `/approve-merge` skill. Full rationale and examples: @.claude/rules/pr-workflow.md
-- **Tracker vocabulary is reserved** -- the words `Ticket`, `#N`, and dependency notation (`blocked by #N`, `depends on #N`) refer ONLY to real GitHub issues that exist in a tracker. Never apply them to in-conversation plan items. When decomposing work in chat, use `Step N` / `Item N` / plain bullets. Crossing the boundary from "plan item" to "tracker item" requires an explicit `gh issue create`. Full rule and anti-pattern example: @.claude/rules/ticket-vocabulary.md
+- **Tracker vocabulary is reserved** -- the words `Ticket`, `SMASH-N` (or any Jira key), and dependency notation (`blocked by SMASH-N`, `depends on SMASH-N`) refer ONLY to real Jira issues that exist in the tracker. Never apply them to in-conversation plan items. When decomposing work in chat, use `Step N` / `Item N` / plain bullets. Crossing the boundary from "plan item" to "tracker item" requires an explicit `/bug`, `/feature`, or `/task` invocation (which creates a real Jira ticket via `mcp__sb-jira-flow__create_ticket`). Full rule and anti-pattern example: @.claude/rules/ticket-vocabulary.md
 - **No hardcoded secrets** -- use environment variables
 
 ### Code Review
@@ -144,7 +144,7 @@ Types: feature, fix, refactor, chore, docs, test
 
 Format: `type(TICKET): description`
 
-Examples: `feat(#42): add user auth`, `fix(APE-123): login bug`
+Examples: `feat(SMASH-42): add user auth`, `fix(SMASH-123): login bug`
 
 ### Commit Messages
 
@@ -154,7 +154,7 @@ type: subject
 - Detailed change 1
 - Detailed change 2
 
-Closes #123
+Closes SMASH-123
 ```
 
 ### File Staging

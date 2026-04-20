@@ -344,7 +344,7 @@ Files that stay close to upstream (merge cleanly most of the time):
 
 **Does the registry support globs?** No. It's an explicit list. If you want all repos in an org, use `gh repo list` to generate the file once and commit the result — but you should still curate it.
 
-**Can I use this with Linear / Jira / etc.?** Yes. Set `ticket_prefix` per project in the registry. Skills that read tickets will use the right prefix per project.
+**Can I use this with Linear / Jira / etc.?** Yes — this fork is already configured for Jira (Atlassian workspace `awesomemotive.atlassian.net`, default project `SMASH`). Set `ticket_prefix` per project in the registry to use a different Jira project for a specific repo. Tickets live in Jira, PRs + CI live on GitHub.
 
 **What if I only have one repo?** Fork apexyard anyway and register that one repo. The skills work the same way. When you add a second project, just append to the registry — no migration, no re-setup.
 

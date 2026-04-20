@@ -28,12 +28,13 @@ The skill pulls from:
 
 | Source | What it gives |
 |--------|---------------|
-| `gh pr list --state merged --search "merged:>=<since>"` | What shipped |
-| `gh issue list --state closed --search "closed:>=<since>"` | What got resolved |
+| `gh pr list --state merged --search "merged:>=<since>"` (GitHub) | What shipped |
+| Jira JQL `project = <PREFIX> AND statusCategory = Done AND resolutiondate >= -<since>d` via `/rest/api/3/search` | What Jira tickets got resolved |
 | `git log --since=<since> --oneline` | Commit volume / themes |
 | `docs/agdr/AgDR-*.md` (in this period, inside each project) | Decisions made |
 | `projects/<name>/roadmap.md` | Strategic direction |
-| `gh pr list --state open` | What's in flight |
+| `gh pr list --state open` (GitHub) | What PRs are in flight |
+| Jira JQL `project = <PREFIX> AND statusCategory = "In Progress"` | What Jira tickets are in flight |
 | `projects/ideas-backlog.md` | Ideas captured |
 
 `<since>` is computed from the update type:
@@ -105,8 +106,9 @@ The skill pulls from:
 
 ## Metrics
 - PRs merged: {N}
-- Issues closed: {N}
+- Jira tickets resolved: {N}
 - Open PRs: {N}
+- Open Jira tickets: {N}
 - Avg. PR review time: {…}
 ```
 
@@ -200,7 +202,7 @@ Without `--project`, generate one section per project, prefixed with the project
 ```
 PORTFOLIO ROLLUP — Week of 2026-04-06
 
-3 projects · 12 PRs merged · 18 issues closed · 4 AgDRs
+3 projects · 12 PRs merged · 18 Jira tickets resolved · 4 AgDRs
 
 ═══════════════════════════════════════
 example-app — Weekly
@@ -223,7 +225,7 @@ marketing-site — Weekly
 1. **Audience-aware** — never use weekly format for a launch update
 2. **Always include the period** — start and end dates explicit
 3. **Never invent metrics** — if a metric can't be computed, omit it
-4. **Use real PR/issue numbers** — every claim links to evidence
+4. **Use real PR numbers and Jira keys** — every claim links to evidence (GitHub PR URL or `{JIRA_BASE_URL}/browse/SMASH-N`)
 5. **AgDRs are first-class** — decisions belong in updates, not just code
 6. **Don't auto-publish** — write the file, suggest the channel, but never post on the user's behalf
 7. **Scope-aware** — one section per project, portfolio rollup when no `--project` flag

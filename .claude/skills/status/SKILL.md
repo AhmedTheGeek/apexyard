@@ -35,13 +35,13 @@ git rev-list --left-right --count origin/main...HEAD  # ahead/behind
 Output:
 
 ```
-Branch: feature/GH-42-csv-export
+Branch: feature/SMASH-42-csv-export
   ↑ 3 commits ahead of origin/main, ↓ 0 behind
   Dirty: 2 files (M src/export.ts, ?? tests/export.test.ts)
 
 Recent commits:
-  abc123  feat(#42): scaffold csv writer
-  def456  test(#42): csv writer happy path
+  abc123  feat(SMASH-42): scaffold csv writer
+  def456  test(SMASH-42): csv writer happy path
   9876ab  chore: bump tsconfig target
 ```
 
@@ -54,8 +54,8 @@ gh pr list --state open --json number,title,url,headRefName,statusCheckRollup,re
 For each PR, show:
 
 ```
-#42  feat(#42): CSV export        🟡 review pending   ✅ CI green   https://…
-#41  fix(#37): timezone bug       ✅ approved         ❌ CI failed  https://…
+#42  feat(SMASH-42): CSV export    🟡 review pending   ✅ CI green   https://…
+#41  fix(SMASH-37): timezone bug   ✅ approved         ❌ CI failed  https://…
 ```
 
 CI status maps:
@@ -74,34 +74,37 @@ gh pr list --state merged --limit 5 \
 
 ```
 Recently merged:
-  #40  chore: bump deps          merged 2h ago by octocat   https://…
-  #39  fix(#36): edge case       merged 1d ago by octocat   https://…
+  #40  chore: bump deps              merged 2h ago by octocat   https://…
+  #39  fix(SMASH-36): edge case      merged 1d ago by octocat   https://…
 ```
 
-### D. In-progress issue
+### D. In-progress ticket
 
-The "current" issue is the one whose number matches the current branch (`feature/GH-42-…` → issue #42):
+The "current" ticket is the Jira key parsed from the branch (`feature/SMASH-42-…` → `SMASH-42`). Also prefer the `key=` field from `.claude/session/current-ticket` when present.
 
 ```bash
-ISSUE=$(git rev-parse --abbrev-ref HEAD | grep -oE 'GH-[0-9]+|[A-Z]+-[0-9]+' | head -1 | grep -oE '[0-9]+')
-gh issue view $ISSUE --json number,title,state,assignees,labels,url
+KEY=$(grep -oE '[A-Z]{2,10}-[0-9]+' <<< "$(git rev-parse --abbrev-ref HEAD)" | head -1)
+# Fetch via _lib-jira.sh (shared curl helper)
+. "$OPS_ROOT/.claude/hooks/_lib-jira.sh"
+jira_get_issue "$KEY" | jq -r '{key: .key, title: .fields.summary, status: .fields.status.name, priority: .fields.priority.name, assignee: .fields.assignee.displayName}'
 ```
 
 Show:
 
 ```
-In progress: #42 — Add CSV export
-  Assigned: @octocat
-  Labels:   feature, priority-high
-  State:    open
-  URL:      https://…
+In progress: SMASH-42 — Add CSV export
+  Assignee: Ahmed Hussein
+  Priority: High
+  Status:   In Progress
+  URL:      https://awesomemotive.atlassian.net/browse/SMASH-42
 ```
 
-If the branch doesn't carry an issue ID, say so and suggest:
+If the branch doesn't carry a Jira key, say so and suggest:
 
 ```
-No issue ID in the current branch name.
-Convention: feature/GH-42-description (or APE-42, ENG-42, etc.)
+No Jira key in the current branch name.
+Convention: feature/SMASH-42-description
+Start a ticket with: /start-ticket SMASH-42
 ```
 
 ### E. AgDR check
@@ -168,18 +171,18 @@ STATUS — example-app — 2026-04-06 09:14
 ========================================
 
 Git:
-  Branch: feature/GH-42-csv-export
+  Branch: feature/SMASH-42-csv-export
   ↑ 3 ahead · ↓ 0 behind · 2 dirty files
 
 Open PRs (1):
-  #42  feat(#42): CSV export    🟡 review pending  ✅ CI green   https://…
+  #42  feat(SMASH-42): CSV export   🟡 review pending  ✅ CI green   https://…
 
 Recently merged (3):
-  #41  fix(#37): timezone bug   merged 2h ago
-  #40  chore: bump deps         merged 1d ago
-  #39  feat(#35): jwt rotation  merged 2d ago
+  #41  fix(SMASH-37): timezone bug  merged 2h ago
+  #40  chore: bump deps             merged 1d ago
+  #39  feat(SMASH-35): jwt rotation merged 2d ago
 
-In progress: #42 — Add CSV export   priority-high   https://…
+In progress: SMASH-42 — Add CSV export   High   In Progress   https://awesomemotive.atlassian.net/browse/SMASH-42
 
 Recent AgDRs:
   AgDR-0007-csv-format-choice.md

@@ -91,9 +91,9 @@ Columns:
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
 |------|--------|-------------|---------------|---------------------------------|
-| `Ticket`, `#N`, `blocked by #N` refer ONLY to real GitHub issues | `.claude/rules/ticket-vocabulary.md § The rule`, `CLAUDE.md § Quality Rules` | prose + downstream backstops | partial | prose is primary; `validate-pr-create.sh` and `verify-commit-refs.sh` catch the symptoms in durable artefacts [^self-discipline] |
+| `Ticket`, Jira keys (`SMASH-N`), `blocked by SMASH-N` refer ONLY to real Jira issues | `.claude/rules/ticket-vocabulary.md § The rule`, `CLAUDE.md § Quality Rules` | prose + downstream backstops | partial | prose is primary; `validate-pr-create.sh` and `verify-commit-refs.sh` catch the symptoms in durable artefacts (both call `_lib-jira.sh` against the Jira REST API) [^self-discipline] |
 | Never apply tracker notation to in-conversation plan items | `.claude/rules/ticket-vocabulary.md § The rule` | prose | no | chat-output rule, same class as the `/decide` triggers [^self-discipline] |
-| Crossing "plan item → tracker item" requires an explicit `gh issue create` | `.claude/rules/ticket-vocabulary.md § The boundary-crossing rule` | prose | no | workflow rule, not a mechanical check |
+| Crossing "plan item → tracker item" requires an explicit `/feature` / `/bug` / `/task` invocation (which calls `mcp__sb-jira-flow__create_ticket`) | `.claude/rules/ticket-vocabulary.md § The boundary-crossing rule` | prose | no | workflow rule, not a mechanical check |
 
 ### 6. Code standards
 

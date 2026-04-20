@@ -2,12 +2,12 @@
 name: idea
 description: Submit a new product idea, feature concept, or internal tool proposal to the ideas backlog. Use when capturing a new product concept that hasn't been triaged yet.
 argument-hint: "<short title of the idea>"
-allowed-tools: Bash, Read, Edit, Write
+allowed-tools: Bash, Read, Edit, Write, mcp__sb-jira-flow__create_ticket, mcp__sb-jira-flow__validate_ticket_title
 ---
 
 # /idea — Submit a New Product Idea
 
-Capture a new product, feature, or internal-tool idea so it lands somewhere durable instead of evaporating in chat. This skill is intentionally lightweight: it adds an entry to the ideas backlog and (optionally) creates a tracking GitHub Issue. It does **not** replace `/write-spec` — that comes later, after the idea has been triaged.
+Capture a new product, feature, or internal-tool idea so it lands somewhere durable instead of evaporating in chat. This skill is intentionally lightweight: it adds an entry to the ideas backlog and (optionally) creates a tracking Jira ticket with the `needs-triage` label. It does **not** replace `/write-spec` — that comes later, after the idea has been triaged.
 
 ## Usage
 
@@ -103,7 +103,7 @@ If the backlog file doesn't exist, create it with this header:
 # Ideas Backlog
 
 Lightweight capture of product ideas, feature concepts, and internal tool proposals.
-Use `/idea` to add a new entry. Triage moves entries into `/write-spec`, then into a GitHub Issue.
+Use `/idea` to add a new entry. Triage moves entries into `/write-spec`, then into a Jira ticket.
 
 | ID | Title | Category | Submitter | Date | Status | Description |
 |----|-------|----------|-----------|------|--------|-------------|
@@ -115,64 +115,44 @@ Append a new row:
 | IDEA-NNN | {title} | {category} | {submitter} | YYYY-MM-DD | NEW | {one-line description} |
 ```
 
-### 6. Offer the tracking issue
+### 6. Offer the tracking ticket
 
 After the entry is appended, ask:
 
 ```
-Would you like me to create a tracking GitHub Issue for IDEA-NNN? (y/n)
+Would you like me to create a tracking Jira ticket for IDEA-NNN? (y/n)
 ```
 
 If the user says no, skip this step entirely — the backlog entry is already saved, and that's enough.
 
-If yes, create one with the `enhancement` and `idea` labels (creating the labels if needed):
-
-```bash
-gh issue create \
-  --title "[Idea] {title}" \
-  --body "$(cat <<'EOF'
-## Idea
-{one-line description}
-
-## Category
-{category}
-
-## Submitter
-{submitter}
-
-## Backlog Entry
-IDEA-NNN — see backlog file.
-
-## Next Step
-Triage. Decide whether to spec, schedule, or close.
-EOF
-)" \
-  --label "idea,needs-triage"
-```
-
-**Error handling** — if `gh issue create` fails for any reason (missing auth, labels don't exist, network error, rate limit), catch the error and fall back gracefully:
+If yes, create one in the configured Jira project (default `SMASH` from `onboarding.yaml`) with the `needs-triage` label via `mcp__sb-jira-flow__create_ticket`:
 
 ```
-⚠ Couldn't create the tracking issue: {reason}
+mcp__sb-jira-flow__create_ticket({
+  title: "{title}",
+  type: "feature",
+  description: "## Idea\n{one-line description}\n\n## Category\n{category}\n\n## Submitter\n{submitter}\n\n## Backlog Entry\nIDEA-NNN — see projects/ideas-backlog.md\n\n## Next Step\nTriage. Decide whether to spec, schedule, or close.",
+  acceptance_criteria: ["Idea reviewed at next triage", "Decision recorded (spec / schedule / close)"],
+  component: "{component or 'Triage'}",
+  labels: ["needs-triage", "idea"]
+})
+```
+
+Ask for component if not obvious — for an idea this can be `Triage` as a catch-all.
+
+**Error handling** — if the MCP call fails (auth, network, component rejected), fall back gracefully:
+
+```
+⚠ Couldn't create the tracking ticket: {reason}
   The idea is still saved in projects/ideas-backlog.md as IDEA-NNN.
 
-  Try again? (y = retry, n = skip, gh = show the gh error for debugging)
+  Try again? (y = retry, n = skip)
 >
 ```
 
-Common failure modes and what to do:
+The guiding principle: **the backlog entry is the primary artefact; the tracking ticket is a bonus**. Never lose the backlog entry because Jira was flaky.
 
-| Failure | Action |
-|---------|--------|
-| `could not resolve repository` | Ask the user which repo to file the issue in; the backlog entry was already saved |
-| `missing scope: issues:write` | Tell the user to run `gh auth refresh -s issues` and offer to retry |
-| `label "idea" not found` | Create the label first (`gh label create idea`) then retry |
-| `HTTP 403 rate-limited` | Offer to retry after a short wait |
-| Any other error | Show the raw `gh` output, skip the tracking issue, keep the backlog entry |
-
-The guiding principle: **the backlog entry is the primary artefact; the tracking issue is a bonus**. Never lose the backlog entry because the GitHub Issue creation failed.
-
-If the issue is created successfully, append the issue URL to the backlog row's Description column as `(GH#NN)`.
+If the ticket is created successfully, append the Jira key to the backlog row's Description column as `(SMASH-NN)`.
 
 ## Output
 
@@ -180,7 +160,7 @@ If the issue is created successfully, append the issue URL to the backlog row's 
 Captured: IDEA-NNN — {title}
 Backlog: {file path}
 Status: NEW
-Tracking issue: {url or "skipped"}
+Tracking ticket: {jira_key + url, or "skipped"}
 
 Next: triage with the team, then `/write-spec` if it survives.
 ```
@@ -194,8 +174,8 @@ Next: triage with the team, then `/write-spec` if it survives.
 5. **Single backlog** — every idea goes into `projects/ideas-backlog.md` at the root of the ops repo; triage assigns it to a project later.
 6. **Validate before accepting** — category must be 1-4; description must be non-empty. Loop until valid; never silently accept garbage.
 7. **Dedup before appending** — fuzzy-match the title against existing entries; flag and confirm before creating a second entry for the same idea.
-8. **The backlog is the primary artefact** — if the tracking issue fails to create, the backlog entry still stands. Never lose data because GitHub was flaky.
-9. **Don't create the issue silently** — always ask first.
+8. **The backlog is the primary artefact** — if the tracking ticket fails to create, the backlog entry still stands. Never lose data because Jira was flaky.
+9. **Don't create the ticket silently** — always ask first.
 10. **Never delete** — superseded ideas get status `SUPERSEDED`, not removal.
 
 ## Status values

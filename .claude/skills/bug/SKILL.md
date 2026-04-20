@@ -1,13 +1,13 @@
 ---
 name: bug
-description: Create a structured bug report with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.
+description: Create a structured bug report in Jira with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.
 argument-hint: "<short description of the bug>"
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, mcp__sb-jira-flow__create_ticket, mcp__sb-jira-flow__validate_ticket_title, mcp__sb-jira-flow__save_atlassian_config
 ---
 
-# /bug — Create a Bug Report Ticket
+# /bug — Create a Bug Report Ticket (Jira)
 
-Creates a structured GitHub Issue for a bug with Given/When/Then scenario, repro steps, environment, and severity. Asks guided questions, shows the formatted ticket for confirmation, then creates the issue.
+Creates a structured Jira ticket for a bug with Given/When/Then scenario, repro steps, environment, and severity. Asks guided questions, shows the formatted ticket, then creates it via `mcp__sb-jira-flow__create_ticket`.
 
 ## Usage
 
@@ -19,15 +19,15 @@ Creates a structured GitHub Issue for a bug with Given/When/Then scenario, repro
 
 ## Process
 
-### 1. Resolve the target repo
+### 1. Resolve the target Jira project
 
-Read `.claude/session/current-ticket` to determine which repo we're working in. If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
+Same resolution as `/feature`:
 
-```
-Which project is this bug in?
-```
+1. `.claude/session/current-ticket` → `key=<PREFIX>-<N>` → use `<PREFIX>`
+2. `apexyard.projects.yaml` project `ticket_prefix`
+3. `onboarding.yaml` `project_management.ticket_prefix` (default `SMASH`)
 
-If no projects are registered, ask for the repo in `owner/repo` format.
+Ask only if ambiguous.
 
 ### 2. Parse or ask for the title
 
@@ -37,9 +37,9 @@ Take the title from `$ARGUMENTS`. If empty, ask:
 What's the bug? Give me a short description.
 ```
 
-### 3. Gather details (one question at a time)
+Run `mcp__sb-jira-flow__validate_ticket_title` to confirm convention. Bug titles should be imperative/declarative describing the broken behaviour (e.g. "Upload fails when file exceeds 5MB").
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next.
+### 3. Gather details (one question at a time)
 
 **a) Bug Scenario**
 
@@ -51,7 +51,7 @@ Describe the bug scenario:
 - Expected: what should happen instead?
 ```
 
-If the user gives a casual description, restructure it into Given/When/Then/Expected format and confirm.
+If the user gives a casual description, restructure into Given/When/Then/Expected and confirm.
 
 **b) Repro Steps**
 
@@ -59,22 +59,30 @@ If the user gives a casual description, restructure it into Given/When/Then/Expe
 What are the exact steps to reproduce?
 ```
 
+Require at least one.
+
 **c) Severity**
 
 ```
 How severe is this?
-1. P0 — blocks a core feature, must fix immediately
-2. P1 — important, fix soon
-3. P2 — minor, fix when convenient
+1. P0 — blocks a core feature, must fix immediately   (→ Jira priority: Highest)
+2. P1 — important, fix soon                           (→ Jira priority: High)
+3. P2 — minor, fix when convenient                    (→ Jira priority: Medium)
 ```
 
-**d) Environment (optional)**
+**d) Component (required for SMASH)**
+
+```
+Which component / feature area? (e.g. "TikTok Feed", "Dashboard")
+```
+
+**e) Environment (optional)**
 
 ```
 Any environment details? (browser, device, staging/prod, or Enter to skip)
 ```
 
-**e) Investigation Notes (optional)**
+**f) Investigation Notes (optional)**
 
 ```
 Any initial investigation? (root cause hypothesis, relevant code paths, or Enter to skip)
@@ -82,68 +90,79 @@ Any initial investigation? (root cause hypothesis, relevant code paths, or Enter
 
 ### 4. Show the formatted ticket for confirmation
 
-Display the full ticket:
-
 ```
-Here's the ticket I'll create:
+Here's the ticket I'll create in {PROJECT_KEY}:
 
 ---
-**[{P0|P1|P2}] {title}**
+Title: {title}
+Type: Bug
 
-## Bug Scenario
+Description:
 **Given** {precondition}
 **When** {action}
 **Then** {unexpected result}
 **Expected** {correct behavior}
 
-## Repro Steps
-1. {step 1}
-2. {step 2}
-3. ...
-
-## Environment
+Environment:
 {environment or "Not specified"}
 
-## Severity
-{P0-critical / P1-important / P2-later}
-
-## Investigation Notes
+Investigation Notes:
 {notes or "—"}
+
+Steps to Reproduce:
+1. {step 1}
+2. {step 2}
+
+Acceptance Criteria (resolution):
+- Bug no longer reproduces following the steps above
+- Expected behavior from the scenario is observed
+
+Priority: {Highest|High|Medium}
+Component: {component}
+Labels: bug, {p0|p1|p2}
 ---
 
-Labels: bug, {P0|P1|P2}
-Repo: {owner/repo}
-
-Create this ticket? (yes / edit / cancel)
+Create this ticket in Jira? (yes / edit / cancel)
 ```
 
 ### 5. Handle response
 
-- **yes** / **looks good** / **go** → create the issue
-- **edit** / **change X** → ask what to change, update, re-show
-- **cancel** / **no** → abort
+- **yes** → create the ticket
+- **edit** → ask what to change, update, re-show
+- **cancel** → abort
 
-### 6. Create the GitHub Issue
-
-```bash
-gh issue create --repo {owner/repo} \
-  --title "[{P0|P1|P2}] {title}" \
-  --label "bug,{priority}" \
-  --body "{formatted body}"
-```
-
-### 7. Return the URL
+### 6. Create the Jira ticket
 
 ```
-Created: {owner/repo}#{number} — {title}
-{url}
+mcp__sb-jira-flow__create_ticket({
+  title: "{title}",
+  type: "bug",
+  description: "{Given/When/Then/Expected + env + investigation}",
+  steps_to_reproduce: "1. ...\n2. ...",
+  acceptance_criteria: ["Bug no longer reproduces", "Expected behavior observed"],
+  component: "{component}",
+  labels: ["bug", "{p0|p1|p2}"]
+})
+```
+
+Then phase 2 with the returned `ticket_id` and `base_branch: "main"`.
+
+### 7. Return the URL + next step
+
+```
+Created: {JIRA_KEY} — {title}
+{JIRA_BASE_URL}/browse/{JIRA_KEY}
+
+Branch created: fix/{JIRA_KEY}-{slug}
+
+Next: /start-ticket {JIRA_KEY} to activate it for this session.
 ```
 
 ## Rules
 
-1. **One question at a time.** Never batch questions. Wait for each answer.
+1. **One question at a time.** Never batch. Wait for each answer.
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **Given/When/Then is required.** Restructure casual descriptions into the format.
 4. **At least one repro step.** Don't create bugs without repro.
-5. **Labels auto-applied.** `bug` always, plus the severity label.
-6. **Title prefix.** Severity in brackets: `[P0]`, `[P1]`, or `[P2]`.
+5. **Component is required for SMASH.**
+6. **Severity maps to Jira priority** — P0→Highest, P1→High, P2→Medium.

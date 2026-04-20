@@ -1,22 +1,27 @@
 #!/bin/bash
-# PreToolUse hook on `git commit -m / -F`: scans the commit message for
-# issue references (Closes #N, Refs #N, Fixes #N, Resolves #N, Related to #N)
-# and blocks the commit if any reference points at an issue that doesn't
-# exist in the tracker repo.
+# PreToolUse hook on `git commit -m / -F`: scans the commit message for Jira
+# smart-commit references (Closes SMASH-123, Fixes SMASH-45, etc.) and blocks
+# the commit if any reference points at an issue that doesn't exist in Jira.
 #
 # Backstop for the ticket-vocabulary rule (.claude/rules/ticket-vocabulary.md).
 # The primary enforcement is self-discipline: never use tracker notation for
 # plan items that have no real issue behind them. This hook catches the
-# downstream symptom — a fabricated #N that made it into a commit message
-# on its way to becoming durable history.
+# downstream symptom — a fabricated SMASH-N that made it into a commit
+# message on its way to becoming durable history.
+#
+# Jira smart-commit syntax is the bare key (no `#` sigil). We accept any
+# 2-10 char uppercase project prefix so a team with multiple Jira projects
+# (e.g. SMASH + APEX) works out of the box.
 #
 # Interactive commits (no -m / -F) are NOT checked. Parsing .git/COMMIT_EDITMSG
-# before the editor opens would race with git's own validation, and Claude
-# rarely uses the interactive path anyway. Accepted gap.
+# before the editor opens would race with git's own validation. Accepted gap.
 #
-# Tracker repo resolves in this order:
-#   1. .claude/project-config.json `.tracker_repo`
-#   2. origin remote (parsed from `git remote get-url origin`)
+# If Jira creds aren't available, WARN and pass — /start-ticket + skills
+# enforce strong validation via MCP.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_lib-jira.sh
+. "$SCRIPT_DIR/_lib-jira.sh"
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -33,19 +38,11 @@ fi
 # Extract the commit message. Try -m "..." / -m '...' first, then -F <file>.
 # If neither is present, assume interactive commit — skip.
 #
-# IMPORTANT: Claude and humans both commonly use multi-line -m arguments via
-# HEREDOC substitution like `git commit -m "$(cat <<EOF ... EOF)"`, which means
-# the literal -m value spans multiple lines in the command string. `sed -nE`
-# processes stdin line-by-line by default, so a regex like `-m "([^"]*)"`
-# cannot span lines and silently fails to match.
-#
-# Fix: flatten the command string with `tr '\n' ' '` before sed processing.
-# The message then parses as a single logical line. The ref-pattern grep
-# below doesn't care about line breaks either way.
-#
-# Without this flattening, the hook was INERT for any multi-line commit —
-# which is the default shape for Claude-generated commits. Confirmed via
-# smoke test before the fix.
+# Claude commonly uses multi-line -m args via HEREDOC:
+#   git commit -m "$(cat <<EOF ... EOF)"
+# The literal -m value spans multiple lines in the command string. `sed -nE`
+# processes stdin line-by-line, so a regex like `-m "([^"]*)"` cannot span
+# lines. Fix: flatten the command string with `tr '\n' ' '` first.
 COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
 
 MSG=""
@@ -71,79 +68,65 @@ if [ -z "$MSG" ]; then
   exit 0
 fi
 
-# Extract issue references. Patterns matched (case-insensitive):
-#   Closes #N / Close #N / Closed #N
-#   Fixes #N / Fix #N / Fixed #N
-#   Resolves #N / Resolve #N / Resolved #N
-#   Refs #N / Ref #N / References #N / Related to #N
-# One reference per line is the common pattern; multiples in one line also work.
-REFS=$(echo "$MSG" | grep -oEi '\b(close[sd]?|fix(e[sd])?|resolve[sd]?|ref(s|erences)?|related to)[[:space:]]+#[0-9]+' | grep -oE '#[0-9]+' | sort -u)
+# Extract Jira references. Patterns matched (case-insensitive):
+#   Closes SMASH-N / Close SMASH-N / Closed SMASH-N
+#   Fixes SMASH-N / Fix SMASH-N / Fixed SMASH-N
+#   Resolves SMASH-N / Resolve SMASH-N / Resolved SMASH-N
+#   Refs SMASH-N / Ref SMASH-N / References SMASH-N / Related to SMASH-N
+#
+# Jira-key pattern: 2-10 uppercase chars + dash + digits. No `#` prefix.
+REFS=$(echo "$MSG" | grep -oEi '\b(close[sd]?|fix(e[sd])?|resolve[sd]?|ref(s|erences)?|related to)[[:space:]]+[A-Z]{2,10}-[0-9]+' | grep -oE '[A-Z]{2,10}-[0-9]+' | sort -u)
 
 if [ -z "$REFS" ]; then
   exit 0
 fi
 
-# Resolve tracker repo
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-TRACKER_REPO=""
-if [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
-fi
-if [ -z "$TRACKER_REPO" ]; then
-  ORIGIN_URL=$(git remote get-url origin 2>/dev/null)
-  TRACKER_REPO=$(echo "$ORIGIN_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
-fi
-
-if [ -z "$TRACKER_REPO" ]; then
-  echo "WARN: verify-commit-refs.sh could not resolve tracker repo. Skipping." >&2
+if ! jira_available; then
+  echo "WARN: Jira creds not available (JIRA_EMAIL / JIRA_API_TOKEN). Skipping ticket existence check for: $REFS" >&2
   exit 0
 fi
 
-# Verify each referenced issue exists. Fabricated #N (issue not found) is
-# BLOCKING — that's the failure mode the ticket-vocabulary rule targets.
-# References to CLOSED issues are WARNED (not blocked) because a commit may
-# legitimately reference the closed issue it just finished (e.g. a revert or
-# a follow-up clarification commit after the closing PR already shipped).
-# The PR-level hook (validate-pr-create.sh) is the right place to enforce
+# Verify each referenced issue exists. Fabricated SMASH-N (issue not found)
+# is BLOCKING — that's the failure mode the ticket-vocabulary rule targets.
+# References to closed issues are WARNED (not blocked) because a commit may
+# legitimately reference the closed issue it just finished (revert, follow-up
+# clarification after the closing PR shipped). The PR-level hook enforces
 # "every PR needs its own OPEN ticket".
 MISSING=""
 CLOSED=""
 for REF in $REFS; do
-  NUM=$(echo "$REF" | tr -d '#')
-  ISSUE_JSON=$(gh issue view "$NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
-  if [ -z "$ISSUE_JSON" ]; then
+  if ! jira_issue_exists "$REF"; then
     MISSING="${MISSING}${REF} "
     continue
   fi
-  ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty' 2>/dev/null)
-  if [ "$ISSUE_STATE" = "CLOSED" ]; then
+  if jira_is_closed "$REF"; then
     CLOSED="${CLOSED}${REF} "
   fi
 done
 
 if [ -n "$MISSING" ]; then
   cat >&2 <<MSG
-BLOCKED: Commit message references issues that do not exist in ${TRACKER_REPO}:
+BLOCKED: Commit message references Jira issues that do not exist:
   ${MISSING}
 
 This is the failure mode the ticket-vocabulary rule exists to prevent — do NOT
-use tracker notation (Closes #N, Refs #N, etc.) for plan items that have no
-real issue behind them. See .claude/rules/ticket-vocabulary.md.
+use Jira notation (Closes SMASH-N, Refs SMASH-N, etc.) for plan items that
+have no real issue behind them. See .claude/rules/ticket-vocabulary.md.
 
-If you intended to reference a real issue, verify the number(s).
+If you intended to reference a real issue, verify the key.
 If you were about to commit work that has no ticket yet, create one first:
-  gh issue create --repo ${TRACKER_REPO} --title "..."
-and use the returned number in your commit message.
+  /bug, /feature, or /task
+and use the returned SMASH-N in your commit message.
 
-If the reference is truly informational (cross-repo link that can't be verified
-with \`gh issue view\`), write it as a plain URL instead of #N notation.
+If the reference is truly informational (e.g. a GitHub PR in another repo
+that can't be verified as a Jira key), write it as a plain URL instead.
 MSG
   exit 2
 fi
 
 if [ -n "$CLOSED" ]; then
   cat >&2 <<MSG
-WARN: Commit message references CLOSED issue(s) in ${TRACKER_REPO}:
+WARN: Commit message references closed Jira issue(s):
   ${CLOSED}
 This commit is allowed through — a commit may legitimately reference the
 issue it just closed. But at PR-create time the stricter rule applies: every

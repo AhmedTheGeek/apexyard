@@ -104,7 +104,7 @@ Examples:
   feat!: remove deprecated v1 endpoints
   feat(api)!: change response format to JSON:API
   refactor: split order service into read/write sides
-  docs(#42): update deployment runbook
+  docs(SMASH-42): update deployment runbook
 
 The scope in parens is optional for commits (but REQUIRED for PR titles
 with a ticket reference — that's enforced by validate-pr-create.sh).

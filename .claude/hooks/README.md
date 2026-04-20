@@ -32,17 +32,16 @@ These four hooks make the SDLC mechanical instead of advisory. Each enforces a r
 
 **Enforces:** the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists, has acceptance criteria, and is broken into tasks."
 
-**Unblock:** run `/start-ticket <issue>`. The skill verifies the issue via `gh issue view`, resolves the project from the ticket's tracker repo via the portfolio registry, and writes either the per-project or fallback marker.
+**Unblock:** run `/start-ticket SMASH-N`. The skill verifies the Jira issue via `_lib-jira.sh` (or the Atlassian MCP), resolves the project from the Jira key's prefix via the portfolio registry, and writes either the per-project or fallback marker.
 
-### 1a. Migration ticket-first — `require-migration-ticket.sh`
+### 1a. Migration AgDR-first — `require-migration-ticket.sh`
 
 **Event:** `PreToolUse` on `Edit | Write | MultiEdit`. Runs **before** `require-active-ticket.sh` so migration-specific messages surface first.
 
 **What it does:** if `FILE_PATH` matches a migration-path pattern (`migrate-*.{ts,js,py,sql}`, `**/migrations/**`, `prisma/schema.prisma` + `prisma/migrations/**`, `src/migrations/*.{ts,js}` for TypeORM, `alembic/versions/*.py`, `db/migrate/*.rb`), verifies three gates:
 
 1. Active ticket marker exists (same resolution as hook #1)
-2. The referenced tracker issue is OPEN and carries the `migration` label (default; overridable per project via `.claude/project-config.json` → `migration_label`)
-3. The issue body references a migration AgDR at `docs/agdr/AgDR-\d+-.*migration.*\.md`
+2. A migration AgDR exists on disk at `docs/agdr/AgDR-\d+-.*migration.*\.md` (no Jira label/type check — Awesome Motive's Jira workflow doesn't model migrations as a distinct class)
 
 If any gate fails, blocks with a message pointing at the `/migration` skill. If `FILE_PATH` doesn't match a migration pattern, exits silently (hook #1 handles the normal ticket check).
 
@@ -105,38 +104,35 @@ Silent if: no `upstream` remote (upstream repo itself, or fork that hasn't confi
 
 ## The Ticket-Vocabulary Backstops
 
-These two hooks are the mechanical backstop for the rule in `.claude/rules/ticket-vocabulary.md` — "`Ticket`, `#N`, and dependency notation refer ONLY to real GitHub issues". The rule itself is self-discipline; these hooks catch the downstream symptom (a fabricated `#N` that slipped into a durable artifact).
+These two hooks are the mechanical backstop for the rule in `.claude/rules/ticket-vocabulary.md` — "`Ticket`, Jira keys like `SMASH-N`, and dependency notation refer ONLY to real Jira issues". The rule itself is self-discipline; these hooks catch the downstream symptom (a fabricated key that slipped into a durable artifact).
 
 ### 5. PR-title issue verification — `validate-pr-create.sh` (extended)
 
 **Event:** `PreToolUse` on `Bash(gh pr create *)`.
 
-**What it does:** after the existing title-format / glossary / branch-ID checks, extracts the issue number from the PR title (e.g. `14` from `feat(#14): …`) and runs `gh issue view <N> --repo <tracker>` to verify it exists. Blocks PR creation with a clear message if the issue is missing.
+**What it does:** after the existing title-format / glossary / branch-ID checks, extracts the Jira key from the PR title (e.g. `SMASH-14` from `feat(SMASH-14): …`) and calls `jira_get_issue` (from `_lib-jira.sh`) to verify it exists and isn't Done/Cancelled. Blocks PR creation with a clear message if the key is missing or closed.
 
-**Tracker repo resolution:**
+**Jira resolution:** the key is parsed directly from the PR title (e.g. `SMASH-14` from `feat(SMASH-14): …`), validated against the Jira REST API via `_lib-jira.sh`. No per-project config needed — the key is self-identifying.
 
-1. First tries `.tracker_repo` in `.claude/project-config.json` if present
-2. Falls back to parsing the `origin` remote (`owner/repo` from SSH or HTTPS URL)
+**Why:** catches the case where Claude built a plan using `Ticket N` vocabulary, forgot to create the real ticket, and then went straight to `gh pr create --title "feat(SMASH-N): …"`. The title is the moment the fabrication becomes durable. This hook refuses to let that happen.
 
-**Why:** catches the case where Claude built a plan using `Ticket N` vocabulary, forgot to create the real issue, and then went straight to `gh pr create --title "feat(#N): …"`. The title is the moment the fabrication becomes durable. This hook refuses to let that happen.
-
-### 6. Commit-message ref verification — `verify-commit-refs.sh` (new)
+### 6. Commit-message ref verification — `verify-commit-refs.sh`
 
 **Event:** `PreToolUse` on `Bash(git commit *)`.
 
-**What it does:** parses the commit message from `-m "..."`, `-m '...'`, or `-F <file>` args and scans for issue references matching any of:
+**What it does:** parses the commit message from `-m "..."`, `-m '...'`, or `-F <file>` args and scans for Jira smart-commit references matching any of:
 
-- `Closes #N` / `Close #N` / `Closed #N`
-- `Fixes #N` / `Fix #N` / `Fixed #N`
-- `Resolves #N` / `Resolve #N` / `Resolved #N`
-- `Refs #N` / `Ref #N` / `References #N`
-- `Related to #N`
+- `Closes SMASH-N` / `Close SMASH-N` / `Closed SMASH-N`
+- `Fixes SMASH-N` / `Fix SMASH-N` / `Fixed SMASH-N`
+- `Resolves SMASH-N` / `Resolve SMASH-N` / `Resolved SMASH-N`
+- `Refs SMASH-N` / `Ref SMASH-N` / `References SMASH-N`
+- `Related to SMASH-N`
 
-Each referenced number is verified against the tracker repo via `gh issue view`. Blocks the commit if any reference doesn't resolve.
+Each referenced Jira key is verified via `_lib-jira.sh` (curl against the Jira REST API with 5-minute cache). Blocks the commit if any reference doesn't resolve.
 
 **Limitation:** interactive commits (no `-m` / `-F`) are skipped. Parsing `.git/COMMIT_EDITMSG` before git's own validation would race, and Claude rarely uses the interactive path anyway. Accepted gap — in practice Claude almost always uses `-m` with a HEREDOC.
 
-**Why:** same root as validate-pr-create.sh — commit messages are the other main path where a fabricated `#N` becomes durable. `git log` + `git blame` + GitHub's auto-linking all lean on these references, so wrong ones pollute the permanent record.
+**Why:** same root as validate-pr-create.sh — commit messages are the other main path where a fabricated Jira key becomes durable. `git log` + `git blame` + the GitHub-Jira smart-commit integration all lean on these references, so wrong ones pollute the permanent record and silently drop on Jira's side.
 
 ### Both hooks are backstops, not primary fixes
 
@@ -272,7 +268,7 @@ These were already in place before the enforcement layer and remain unchanged (e
 | `validate-branch-name.sh` | PreToolUse / Bash | **Warns** on non-conforming branch names before push (warning-only; warning→blocker upgrade deferred to a follow-up ticket — breaking change) |
 | `check-secrets.sh` | PreToolUse / Bash | Scans commits for hardcoded secrets |
 | `pre-push-gate.sh` | PreToolUse / Bash | Reminds to run lint / typecheck / test / build |
-| `validate-pr-create.sh` | PreToolUse / Bash | **Blocks** on title format / glossary / branch ID (upgraded from warning in GH-20). Also **blocks** when the title's issue number doesn't exist in the tracker (extended in GH-14). |
+| `validate-pr-create.sh` | PreToolUse / Bash | **Blocks** on title format / glossary / branch ID. Also **blocks** when the title's Jira key doesn't exist or is Done/Cancelled (via `_lib-jira.sh`). |
 
 ## Session State Directory
 

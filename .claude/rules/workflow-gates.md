@@ -5,7 +5,7 @@
 | 1 | PRD → Tech Design | PRD approved, parent epic exists |
 | 2 | Tech Design → Build | Design approved, story tickets exist, **AgDR for key decisions** |
 | 3 | Starting code | Ticket exists, branch created, design review if UI work |
-| 3a | Starting a **migration** edit | Active ticket has the `migration` label **and** its body references a migration AgDR at `docs/agdr/AgDR-\d+-.*migration.*\.md`. Enforced by `require-migration-ticket.sh`. Use `/migration` to produce both artefacts in one flow. |
+| 3a | Starting a **migration** edit | A migration AgDR exists at `docs/agdr/AgDR-\d+-.*migration.*\.md` under the ops root or repo root. Enforced by `require-migration-ticket.sh`. Use `/migration` to produce the AgDR (and optionally a paired Jira ticket) in one flow. Jira at Awesome Motive doesn't model migrations as a distinct issue type or label — the AgDR file is the load-bearing artefact. |
 | 4 | Creating PR | Tests pass, checks pass, **> 80% coverage**, **AgDR linked if decisions made** |
 | 5 | Merging PR | 2 reviews (agent + human), CI green, **commit SHA matches review** |
 | 6 | Ticket → Done | QA verified, signed off |
@@ -36,12 +36,9 @@ Do not start coding until **all** of these exist in your ticket tracker:
 - Technical tasks broken down
 - Tickets moved to "Todo" or "In Progress"
 
-## Migration Gate (3a) — dedicated ticket + AgDR
+## Migration Gate (3a) — AgDR required
 
-Any edit to a file that matches the migration-path patterns (configurable via `.claude/project-config.json` → `migration_paths`) requires:
-
-1. An OPEN tracker issue with the `migration` label (default, overridable via `migration_label`)
-2. The issue body contains a reference to a migration AgDR at `docs/agdr/AgDR-\d+-.*migration.*\.md`
+Any edit to a file that matches the migration-path patterns (configurable via `.claude/project-config.json` → `migration_paths`) requires a migration AgDR on disk at `docs/agdr/AgDR-\d+-.*migration.*\.md`.
 
 Default migration paths:
 
@@ -52,9 +49,11 @@ Default migration paths:
 - `alembic/versions/*.py` — Alembic
 - `db/migrate/*.rb` — Rails
 
-**Enforcement**: `require-migration-ticket.sh` fires on PreToolUse for Edit / Write / MultiEdit. Runs BEFORE `require-active-ticket.sh` in the hook chain — if the path isn't a migration path, it's a no-op and the normal active-ticket check applies.
+**Enforcement**: `require-migration-ticket.sh` fires on PreToolUse for Edit / Write / MultiEdit. If the path matches a migration pattern, it checks for the AgDR. It does NOT check Jira for a `migration` label or issue type — Awesome Motive's Jira workflow doesn't model migrations as a distinct class, so the AgDR is the only durable signal that the author thought through rollback, downtime, consumers, and observability.
 
-**How to satisfy**: run `/migration` — it asks for migration type, affected tables, rollback plan, downtime estimate, cross-service consumers, data volume, testing plan, and observability, then creates the labelled issue AND writes the AgDR in one flow.
+`require-active-ticket.sh` runs alongside and still enforces the "active ticket exists" rule.
+
+**How to satisfy**: run `/migration` — it asks for migration type, affected tables, rollback plan, downtime estimate, cross-service consumers, data volume, testing plan, and observability, then writes the AgDR (and optionally creates a paired Jira ticket for status tracking).
 
 ## QA State is Mandatory
 

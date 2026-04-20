@@ -37,10 +37,10 @@ Also check before pushing:
 ## Before `gh pr create`
 
 ```
-[ ] Ticket exists?            NO → create the ticket FIRST
-[ ] Ticket has AC?            NO → add acceptance criteria
-[ ] Branch has ticket ID?     NO → rename branch
-[ ] PR title has ticket ID?   NO → fix format (single ticket per title)
+[ ] Jira ticket exists?       NO → create with /feature /bug /task
+[ ] Ticket has AC?            NO → add acceptance criteria in Jira
+[ ] Branch has SMASH-N?       NO → rename branch to feature/SMASH-N-desc
+[ ] PR title has SMASH-N?     NO → fix format: type(SMASH-N): desc
 ```
 
 ## After `gh pr create`
@@ -71,6 +71,8 @@ You: "Here's the 6-step plan: 1. merge PR #10, 2. close PR #105, ..."
 CEO: "go"
 You: *runs gh pr merge 10*   ← FAILURE: "go" was plan-level, not merge-level.
 ```
+
+(PR numbers still come from GitHub; only tickets live in Jira. `gh pr merge` is unchanged by the Jira migration.)
 
 #### Right
 

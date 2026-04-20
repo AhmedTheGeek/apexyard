@@ -2,27 +2,26 @@
 
 ## Branch Naming
 
-Format: `{type}/{TICKET-ID}-{description}`
+Format: `{type}/{JIRA-KEY}-{description}`
 
 Examples:
 
-- `feature/ABC-123-add-auth`
-- `fix/GH-45-login-bug`
-- `docs/ENG-99-update-readme`
+- `feature/SMASH-123-add-auth`
+- `fix/SMASH-45-login-bug`
+- `docs/SMASH-99-update-readme`
 
 **Types**: `feature`, `fix`, `refactor`, `chore`, `docs`, `test`, `spike`, `ci`, `build`, `perf`
 
-The `TICKET-ID` should reference an issue in the project's own GitHub repo. Default format: `#58` or `GH-58`. The validators in `.claude/hooks/` also accept any uppercase tracker prefix (e.g. `ABC-123`) for teams using Linear, Jira, or similar — but the ApexYard default is per-project GitHub Issues, with one repo's issues never crossing into another repo's PRs.
+The `JIRA-KEY` is a standard Jira issue key: 2–10 uppercase chars + dash + digits. The default project prefix comes from `onboarding.yaml` (`project_management.ticket_prefix`, default `SMASH`); per-repo overrides live in `apexyard.projects.yaml`.
 
 ## PR Title Format
 
-Must match: `type(TICKET): description` or `type(TICKET)!: description` (breaking change)
+Must match: `type(JIRA-KEY): description` or `type(JIRA-KEY)!: description` (breaking change)
 
-Regex: `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([A-Z]+-[0-9]+|#[0-9]+)\)!?:`
+Regex: `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\([A-Z]{2,10}-[0-9]+\)!?:`
 
-- One ticket ID per PR title — multi-ticket titles like `fix(ABC-1,2,3):` are rejected
-- GitHub Issues use `#XX` format: `fix(#58): description`
-- Breaking changes use `!` before the colon: `feat(#58)!: remove deprecated v1 endpoints`
+- One Jira key per PR title — multi-ticket titles like `fix(SMASH-1,2,3):` are rejected
+- Breaking changes use `!` before the colon: `feat(SMASH-58)!: remove deprecated v1 endpoints`
 
 ## Commit Message Format
 
@@ -34,8 +33,10 @@ type(scope)!: subject (breaking change with scope)
 - Detailed change 1
 - Detailed change 2
 
-Closes #123
+Closes SMASH-123
 ```
+
+Jira smart-commit syntax is the bare key (no `#` sigil). `Closes`, `Fixes`, `Resolves`, and `Refs` are all recognised.
 
 **Types**: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `style`, `perf`
 

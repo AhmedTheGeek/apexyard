@@ -126,13 +126,17 @@ BLOCKED: No active ticket set for this session.
 ApexYard requires a ticket BEFORE any code changes (workflow-gates rule #3,
 pre-build gate, "one ticket at a time"). To proceed:
 
-  1. Create or find the ticket (GitHub Issue in the project's own repo):
-       gh issue create --repo <owner/repo> --title "..."
-  2. Declare it for this session — run the /start-ticket skill with the
-     issue number (or pass owner/repo#number to pin it). The skill writes
-     a per-project marker if the ticket's repo matches a registered
-     managed project, otherwise falls back to the ops-level marker.
-  3. Retry the edit
+  1. Create or find the ticket in Jira (default project: SMASH).
+     If no ticket exists yet, create one:
+       /bug     — for a defect report
+       /feature — for a new capability
+       /task    — for technical work / tech debt
+  2. Declare the ticket for this session:
+       /start-ticket SMASH-<N>
+     The skill writes a per-project marker if the managed project is
+     registered in apexyard.projects.yaml, otherwise falls back to the
+     ops-level marker.
+  3. Retry the edit.
 
 Markers looked up for this path (in order):
 $([ -n "$PER_PROJECT_MARKER" ] && echo "  per-project:  $PER_PROJECT_MARKER")

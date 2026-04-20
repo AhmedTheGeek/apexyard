@@ -1,13 +1,13 @@
 ---
 name: task
-description: Create a structured technical task ticket with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.
+description: Create a structured technical task ticket in Jira with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.
 argument-hint: "<short title of the task>"
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, mcp__sb-jira-flow__create_ticket, mcp__sb-jira-flow__validate_ticket_title, mcp__sb-jira-flow__save_atlassian_config
 ---
 
-# /task — Create a Technical Task Ticket
+# /task — Create a Technical Task Ticket (Jira)
 
-Creates a structured GitHub Issue for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that doesn't fit /feature or /bug.
+Creates a structured Jira ticket for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that doesn't fit `/feature` or `/bug`.
 
 ## Usage
 
@@ -19,15 +19,15 @@ Creates a structured GitHub Issue for a technical task with driver (why), scope 
 
 ## Process
 
-### 1. Resolve the target repo
+### 1. Resolve the target Jira project
 
-Read `.claude/session/current-ticket` to determine which repo we're working in. If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
+Same resolution as `/feature`:
 
-```
-Which project is this task for?
-```
+1. `.claude/session/current-ticket` → `key=<PREFIX>-<N>` → use `<PREFIX>`
+2. `apexyard.projects.yaml` project `ticket_prefix`
+3. `onboarding.yaml` `project_management.ticket_prefix` (default `SMASH`)
 
-If no projects are registered, ask for the repo in `owner/repo` format.
+Ask only if ambiguous.
 
 ### 2. Parse or ask for the title
 
@@ -37,9 +37,9 @@ Take the title from `$ARGUMENTS`. If empty, ask:
 What's the task? Give me a short title.
 ```
 
-### 3. Gather details (one question at a time)
+Run `mcp__sb-jira-flow__validate_ticket_title` for convention.
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next.
+### 3. Gather details (one question at a time)
 
 **a) Driver**
 
@@ -59,86 +59,100 @@ What specifically needs to change? Be concrete — which files, services, or sys
 What are the acceptance criteria? What must be true when this is done?
 ```
 
+Require at least one.
+
 **d) Priority**
 
 ```
 Priority?
-1. P0 — blocks other work
-2. P1 — important, schedule soon
-3. P2 — nice to have, do when convenient
+1. P0 — blocks other work                    (→ Jira priority: Highest)
+2. P1 — important, schedule soon             (→ Jira priority: High)
+3. P2 — nice to have, do when convenient     (→ Jira priority: Medium)
 ```
 
-**e) Risks / Dependencies (optional)**
+**e) Component (required for SMASH)**
 
 ```
-Any risks or dependencies? (what could block this, what depends on it, or Enter to skip)
+Which component / feature area?
+```
+
+**f) Risks / Dependencies (optional)**
+
+```
+Any risks or dependencies? (or Enter to skip)
 ```
 
 ### 4. Show the formatted ticket for confirmation
 
-Display the full ticket:
-
 ```
-Here's the ticket I'll create:
+Here's the ticket I'll create in {PROJECT_KEY}:
 
 ---
-**[{Chore|Refactor|Test|CI}] {title}**
+Title: {title}
+Type: Task
 
-## Driver
-{why this work is needed}
+Description:
+**Driver:** {why this work is needed}
 
-## Scope
-{what specifically needs to change}
+**Scope:** {what specifically needs to change}
 
-## Acceptance Criteria
-- [ ] {criterion 1}
-- [ ] {criterion 2}
-- [ ] ...
+**Risks / Dependencies:** {risks or "None identified"}
 
-## Risks / Dependencies
-{risks or "None identified"}
+Acceptance Criteria:
+- {criterion 1}
+- {criterion 2}
+
+Priority: {Highest|High|Medium}
+Component: {component}
+Labels: {type}, {p0|p1|p2}
 ---
 
-Labels: {type}, {P0|P1|P2}
-Repo: {owner/repo}
-
-Create this ticket? (yes / edit / cancel)
+Create this ticket in Jira? (yes / edit / cancel)
 ```
 
-The title prefix is derived from the content:
+The `{type}` label is derived from the content:
 
-- Testing work → `[Testing]`
-- CI/CD work → `[CI]`
-- Refactoring → `[Refactor]`
-- Everything else → `[Chore]`
+- Testing work → `testing`
+- CI/CD work → `ci`
+- Refactoring → `refactor`
+- Everything else → `chore`
 
 ### 5. Handle response
 
-- **yes** / **looks good** / **go** → create the issue
-- **edit** / **change X** → ask what to change, update, re-show
-- **cancel** / **no** → abort
+- **yes** → create the ticket
+- **edit** → update, re-show
+- **cancel** → abort
 
-### 6. Create the GitHub Issue
-
-```bash
-gh issue create --repo {owner/repo} \
-  --title "[{type}] {title}" \
-  --label "{priority}" \
-  --body "{formatted body}"
-```
-
-### 7. Return the URL
+### 6. Create the Jira ticket
 
 ```
-Created: {owner/repo}#{number} — {title}
-{url}
+mcp__sb-jira-flow__create_ticket({
+  title: "{title}",
+  type: "task",
+  description: "**Driver:** ... **Scope:** ... **Risks:** ...",
+  acceptance_criteria: ["{ac1}", "{ac2}"],
+  component: "{component}",
+  labels: ["{chore|refactor|ci|testing}", "{p0|p1|p2}"]
+})
+```
+
+Then phase 2 with the returned `ticket_id` and `base_branch: "main"`.
+
+### 7. Return the URL + next step
+
+```
+Created: {JIRA_KEY} — {title}
+{JIRA_BASE_URL}/browse/{JIRA_KEY}
+
+Branch created: {refactor|chore}/{JIRA_KEY}-{slug}
+
+Next: /start-ticket {JIRA_KEY} to activate it for this session.
 ```
 
 ## Rules
 
-1. **One question at a time.** Never batch questions. Wait for each answer.
+1. **One question at a time.** Never batch. Wait for each answer.
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **Driver is required.** Every technical task needs a "why".
 4. **At least one acceptance criterion.** Don't create tasks with empty ACs.
-5. **Labels auto-applied.** Priority label always applied.
-6. **Title prefix.** Derived from the nature of the work: Testing, CI, Refactor, or Chore.
+5. **Priority maps to Jira priority** — P0→Highest, P1→High, P2→Medium.

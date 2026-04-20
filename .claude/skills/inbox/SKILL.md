@@ -55,30 +55,36 @@ gh pr list \
 
 Filter to ones where `mergeStateStatus` is `CLEAN` — those are ready to merge right now.
 
-### 4. Issues assigned to you
+### 4. Jira issues assigned to you
+
+Query Jira per registered project (using the project's `ticket_prefix`, defaulting to the global `project_management.ticket_prefix` from `onboarding.yaml`):
 
 ```bash
-gh issue list \
-  --search "is:open is:issue assignee:@me" \
-  --json number,title,url,labels,updatedAt
+# Tickets assigned to you, excluding Done/Cancelled
+curl -sf -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" -H "Accept: application/json" \
+  --data-urlencode "jql=project = ${PREFIX} AND assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC" \
+  --data-urlencode "fields=summary,status,priority,updated" \
+  --data-urlencode "maxResults=50" \
+  --get "${JIRA_BASE_URL:-https://awesomemotive.atlassian.net}/rest/api/3/search"
 ```
 
-### 5. Issues you opened that have new comments since you last looked
+Group by project / Jira project key. If credentials aren't available, surface one-line warning and continue with the PR sections.
 
-```bash
-gh issue list \
-  --search "is:open is:issue author:@me commenter:>@me" \
-  --json number,title,url,comments,updatedAt
+### 5. Jira issues you reported that are still open
+
+```
+jql=project = ${PREFIX} AND reporter = currentUser() AND statusCategory != Done ORDER BY updated DESC
 ```
 
-(GitHub's search syntax doesn't perfectly express "new comments since you last looked", so use `updatedAt` and filter client-side against a stored "last seen" timestamp if available, otherwise show everything from the last 7 days.)
+Show newest first. This surfaces tickets you filed but haven't been actioned on yet.
 
-### 6. Mentions in comments
+### 6. Mentions in Jira comments / descriptions
 
-```bash
-gh search issues "mentions:@me is:open" \
-  --json number,title,url,repository,updatedAt
 ```
+jql=project = ${PREFIX} AND text ~ "currentUser()" AND statusCategory != Done ORDER BY updated DESC
+```
+
+Jira doesn't have a native `@me` operator — `text ~` matches free-text fields. Fall back to `assignee = currentUser() OR reporter = currentUser()` if text-search doesn't surface what you expect.
 
 ### 7. PRs failing CI on a branch you authored
 
@@ -90,14 +96,13 @@ gh pr list \
 
 Filter client-side to those where any check is `FAILURE`.
 
-### 8. Blocking labels across managed projects
+### 8. Blocking Jira tickets
 
-```bash
-gh issue list --label blocked --state open \
-  --json number,title,url,labels
+```
+jql=project = ${PREFIX} AND labels in (blocked, blocker) AND statusCategory != Done
 ```
 
-(Run per project from the registry.)
+Run per registered project.
 
 ## Output format
 
@@ -118,20 +123,20 @@ INBOX — 2026-04-06 09:14
 🟢 Your PRs ready to merge (1)
   · example-app#41  Add health endpoint       2 approvals · CI green            https://…
 
-📬 Issues assigned to you (4)
-  · example-app#117 [Bug] Login fails on Safari       priority-high   https://…
-  · billing-api#22  [Feature] Multi-currency support  priority-medium https://…
+📬 Jira tickets assigned to you (4)
+  · SMASH-117   [Bug] Login fails on Safari       Highest   In Progress   https://…/browse/SMASH-117
+  · SMASH-22    Multi-currency support            High      To Do         https://…/browse/SMASH-22
   · …
 
-💬 New comments on issues you opened (2)
-  · example-app#98   3 new comments since yesterday    https://…
-  · marketing#5      Designer left a comment           https://…
+💬 Jira tickets you reported, still open (2)
+  · SMASH-98    Waiting on triage                 Medium    https://…/browse/SMASH-98
+  · SMASH-5     Designer added a comment          Low       https://…/browse/SMASH-5
 
 🚨 PRs with failing CI (1)
   · example-app#42   lint job failed                    https://…
 
-🛑 Blocked items (1)
-  · billing-api#19   Waiting on API key from vendor     https://…
+🛑 Blocked Jira tickets (1)
+  · SMASH-19    Waiting on API key from vendor     https://…/browse/SMASH-19
 
 Summary: 12 items · 3 PRs to review · 1 ready to merge · 1 blocking CI failure
 ```
@@ -157,9 +162,10 @@ If everything is empty:
 2. **Always sort by recency within each section** — newest updates first
 3. **Registry-scoped** — only projects listed in `apexyard.projects.yaml` count; never shell out to "all repos in the org"
 4. **Skip empty sections** — don't print headers with `(0)`
-5. **Never error on a single project** — if one repo is unreachable, mark it `?` and continue
-6. **Always include URLs** — every row needs a clickable link
+5. **Never error on a single source** — if Jira is unreachable, surface a warning once and continue with GitHub data (and vice versa)
+6. **Always include URLs** — every row needs a clickable link (Jira `.../browse/<KEY>` or GitHub PR URL)
 7. **No noise** — items where you have no possible action shouldn't appear (e.g. PRs you've already approved)
+8. **Hybrid source** — tickets from Jira, PRs from GitHub. Don't conflate them.
 
 ## Related skills
 

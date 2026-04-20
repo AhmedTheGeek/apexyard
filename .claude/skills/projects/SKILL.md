@@ -45,9 +45,17 @@ else
   DIRTY="-"
 fi
 
-# Always go to GitHub for PRs / issues (project of record)
+# GitHub is the source of truth for PRs
 PRS=$(gh -R {repo} pr list --state open --json number --jq 'length')
-ISSUES=$(gh -R {repo} issue list --state open --json number --jq 'length')
+
+# Jira is the source of truth for tickets — query JQL per project key
+PREFIX={ticket_prefix}  # from the registry entry (or the global default)
+TICKETS=$(curl -sf -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" -H "Accept: application/json" \
+  --data-urlencode "jql=project = ${PREFIX} AND statusCategory != Done" \
+  --data-urlencode "fields=summary" \
+  --data-urlencode "maxResults=0" \
+  --get "${JIRA_BASE_URL:-https://awesomemotive.atlassian.net}/rest/api/3/search" \
+  | jq -r '.total // 0')
 ```
 
 If `apexyard.projects.yaml` doesn't exist at the ops-repo root, print a clear error pointing the user at `apexyard.projects.yaml.example` and `docs/multi-project.md` for the setup guide.
@@ -57,17 +65,17 @@ If `apexyard.projects.yaml` doesn't exist at the ops-repo root, print a clear er
 A markdown table:
 
 ```markdown
-| Project | Status | Branch | PRs | Issues | Last Commit | Dirty |
-|---------|--------|--------|-----|--------|-------------|-------|
-| example-app | active | main | 3 | 12 | 2h ago — fix(...) | 0 |
-| billing-api | handover | feature/GH-4 | 1 | 8 | 1d ago — feat(...) | 2 |
-| marketing-site | paused | main | 0 | 1 | 30d ago — chore(...) | 0 |
+| Project | Jira Key | Status | Branch | PRs | Tickets | Last Commit | Dirty |
+|---------|----------|--------|--------|-----|---------|-------------|-------|
+| example-app | SMASH | active | main | 3 | 12 | 2h ago — fix(...) | 0 |
+| billing-api | SMASH | handover | feature/SMASH-4 | 1 | 8 | 1d ago — feat(...) | 2 |
+| marketing-site | APEX | paused | main | 0 | 1 | 30d ago — chore(...) | 0 |
 ```
 
 After the table, a summary line:
 
 ```
-3 projects · 4 open PRs · 21 open issues · 1 dirty workspace
+3 projects · 4 open PRs · 21 open Jira tickets · 1 dirty workspace
 ```
 
 And, if relevant, flag rows that need attention:
@@ -99,11 +107,11 @@ And, if relevant, flag rows that need attention:
 ## Rules
 
 1. **Registry-driven** — the registry is the source of truth; no discovery fallback
-2. **Source of truth for PRs/issues = GitHub** — never read from a stale local file
-3. **Source of truth for branch state = local workspace** — `gh` doesn't know about your dirty files
-4. **Don't silently fail on a missing project** — show the row, mark the gap
-5. **Sort by status then name** — active first, then handover, then paused, then archived
-6. **Never modify the registry from this skill** — read-only
+2. **Source of truth for PRs = GitHub**, **tickets = Jira** — don't mix them. Branch state comes from the local workspace.
+3. **Don't silently fail on a missing project** — show the row, mark the gap
+4. **Sort by status then name** — active first, then handover, then paused, then archived
+5. **Never modify the registry from this skill** — read-only
+6. **Per-project Jira key** — `ticket_prefix` from the registry entry takes priority over the global `project_management.ticket_prefix` in `onboarding.yaml`
 
 ## Related skills
 

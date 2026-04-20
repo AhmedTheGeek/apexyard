@@ -27,14 +27,16 @@ The task list is the union of:
 
 | Source | Tool |
 |--------|------|
-| PRs awaiting your review | `gh pr list --search "review-requested:@me is:open"` |
-| PRs you authored that are blocked on you (changes requested, conflicts, failing CI) | `gh pr list --search "author:@me is:open review:changes_requested"` |
-| Issues assigned to you with high priority | `gh issue list --assignee @me --label priority-high,priority-critical` |
-| Issues you opened with new comments | `gh issue list --search "author:@me commenter:>@me is:open"` |
-| Mentions in unresolved threads | `gh search issues "mentions:@me is:open"` |
+| PRs awaiting your review | `gh pr list --search "review-requested:@me is:open"` (GitHub) |
+| PRs you authored that are blocked on you (changes requested, conflicts, failing CI) | `gh pr list --search "author:@me is:open review:changes_requested"` (GitHub) |
+| Jira tickets assigned to you with priority ≥ High | `jql=project = <PREFIX> AND assignee = currentUser() AND priority in (Highest, High) AND statusCategory != Done` (Jira REST search) |
+| Jira tickets you reported, still open | `jql=project = <PREFIX> AND reporter = currentUser() AND statusCategory != Done` |
+| Mentions in Jira text | `jql=project = <PREFIX> AND text ~ "currentUser()" AND statusCategory != Done` |
 | PR comments awaiting your response | `gh api repos/{repo}/pulls/{n}/comments` filtered to threads where you were mentioned and the last reply isn't yours |
-| Open Critical/High issues with no assignee in projects you own | `gh issue list --label priority-critical --assignee none` |
-| Failing CI on your authored open PRs | from `statusCheckRollup` |
+| Unassigned Critical Jira tickets in projects you own | `jql=project = <PREFIX> AND priority = Highest AND assignee is EMPTY AND statusCategory != Done` |
+| Failing CI on your authored open PRs | from `statusCheckRollup` (GitHub) |
+
+All Jira queries use Basic auth with `JIRA_EMAIL` + `JIRA_API_TOKEN` against `${JIRA_BASE_URL}/rest/api/3/search`. Per-project `<PREFIX>` comes from `apexyard.projects.yaml` (`ticket_prefix` field) falling back to `onboarding.yaml` (default `SMASH`).
 
 ## Prioritisation
 
@@ -44,15 +46,15 @@ Tasks are scored and sorted. Higher score = closer to the top.
 |--------|-------|
 | Failing CI on your own PR | +100 |
 | PR ready to merge (approved, CI green) — yours | +90 |
-| Critical issue assigned to you | +80 |
+| Jira ticket with priority=Highest assigned to you | +80 |
 | PR review requested by name on you | +70 |
 | PR review requested on a team you're in | +60 |
 | Changes requested on your PR | +50 |
-| High-priority issue assigned to you | +40 |
-| New comment on an issue you opened | +30 |
-| Mention in an open thread | +20 |
-| Medium-priority issue assigned to you | +10 |
-| Low-priority issue assigned to you | +1 |
+| Jira ticket with priority=High assigned to you | +40 |
+| Jira ticket you reported with new activity | +30 |
+| Mention in an open Jira thread | +20 |
+| Jira ticket with priority=Medium assigned to you | +10 |
+| Jira ticket with priority=Low assigned to you | +1 |
 
 Tie-breakers:
 
@@ -75,10 +77,10 @@ TASKS — 2026-04-06 09:14
               https://github.com/your-org/example-app/pull/42
   3. [REVIEW] billing-api#8   Fix invoice rounding       — review requested 3h ago
               https://github.com/your-org/billing-api/pull/8
-  4. [TRIAGE] example-app#117 [Bug] Login fails Safari   — priority-high, unassigned
-              https://github.com/your-org/example-app/issues/117
-  5. [REPLY]  marketing#5     Hero copy refresh          — designer commented 1h ago
-              https://github.com/your-org/marketing/issues/5
+  4. [TRIAGE] SMASH-117       Login fails on Safari      — Highest, unassigned
+              https://awesomemotive.atlassian.net/browse/SMASH-117
+  5. [REPLY]  SMASH-5         Hero copy refresh          — designer commented 1h ago
+              https://awesomemotive.atlassian.net/browse/SMASH-5
   6. [FIX]    example-app#39  Refactor session store     — Code Reviewer requested changes
               https://github.com/your-org/example-app/pull/39
   …
@@ -92,8 +94,8 @@ Markdown (`--markdown`, suitable for pasting into a TODO file):
 - [ ] **MERGE** example-app#41 — Add health endpoint (approved, CI green) — https://…
 - [ ] **FIX-CI** example-app#42 — CSV export, lint job failed — https://…
 - [ ] **REVIEW** billing-api#8 — Fix invoice rounding — https://…
-- [ ] **TRIAGE** example-app#117 — Login fails on Safari (priority-high) — https://…
-- [ ] **REPLY** marketing#5 — Hero copy refresh, designer commented — https://…
+- [ ] **TRIAGE** SMASH-117 — Login fails on Safari (Highest) — https://…/browse/SMASH-117
+- [ ] **REPLY** SMASH-5 — Hero copy refresh, designer commented — https://…/browse/SMASH-5
 ```
 
 JSON (`--json`):

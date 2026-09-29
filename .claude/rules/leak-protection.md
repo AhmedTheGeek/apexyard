@@ -20,6 +20,28 @@ Private project identifiers (names, repo slugs, workspace paths) belong in your 
 - `.projects[].repo` — exact `owner/repo` match, optionally followed by `#<N>` to catch ticket references. Skipped when equal to the target repo.
 - `.projects[].workspace` — whole-word match on the workspace path.
 
+## Public registry entries — `public: true`
+
+A registered project whose repo is public — a public marketing site, say —
+is not a private identifier. Add `public: true` to that entry in
+`apexyard.projects.yaml`:
+
+```yaml
+- name: marketing-site
+  repo: your-org/marketing-site
+  public: true
+```
+
+Every leak hook (`check-private-refs-staged.sh`, `check-private-refs-runtime.sh`,
+`block-private-refs-in-public-repos.sh`) reads the field through the shared
+parser at `.claude/hooks/_lib-registry-parser.sh` and skips that entry's
+`name`, `repo`/`repos`, and `workspace` when scanning for a leak
+(me2resh/apexyard#1455). Omitting the field, or setting it to anything other
+than `true`, keeps the entry private — the hooks fail closed by default.
+
+`public: true` is per-entry, not global: an unrelated private project two
+entries down in the same registry still blocks normally.
+
 ## What does NOT get scrubbed
 
 - The fork owner's git identity (name / email) — that's signed on every commit anyway.

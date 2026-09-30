@@ -92,7 +92,7 @@
 # parser, the same "regex/parameter-expansion only, sufficient for the
 # shapes real callers emit" discipline as `_extract_wrapper_arg` above.
 # It is called ONLY at the four hooks' raw-payload fallback call sites
-# (`is_merge_command "$(_normalize_json_escapes "$INPUT")"`), never from
+# (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never from
 # inside `is_merge_command` itself and never on the normal jq-present
 # path: jq has ALREADY correctly decoded these same escapes for that path
 # (that's what `jq -r` does), so re-normalizing already-decoded text would
@@ -233,7 +233,7 @@ _extract_wrapper_arg() {
 # as `_extract_wrapper_arg` above.
 #
 # Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
-# (`is_merge_command "$(_normalize_json_escapes "$INPUT")"`), never
+# (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never
 # `is_merge_command` itself and never the normal jq-present path — see the
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
@@ -270,6 +270,114 @@ _normalize_json_escapes() {
   printf '%s' "$text"
 }
 
+# Merge-only scrub decision (AgDR-0196). The general command scrubber permits
+# programs such as git, gh, rg and sort that can execute arguments or files.
+# Do not use that allowlist here: a later program could execute earlier data.
+# Accept only literal command words from the narrow list, in EVERY segment.
+# Unknown syntax, substitutions, incomplete heredocs, or parser failures keep
+# the entire raw command. This function never executes the command text.
+_scrub_merge_command() {
+  local cmd="$1" result
+  if [ "${#cmd}" -gt 120000 ] || ! command -v awk >/dev/null 2>&1; then
+    printf '%s' "$cmd"
+    return 0
+  fi
+  result=$(MERGE_SCRUB_INPUT="$cmd" awk '
+    function blank(text) { gsub(/[^\n]/, " ", text); return text }
+    # printf is NOT on this list: `printf -v "a[$(cmd)]"` makes the shell
+    # evaluate the array subscript, which runs the substitution (#1489 review).
+    function allowed(word) {
+      return word == "grep" || word == "egrep" || word == "fgrep" || \
+             word == "cat" || word == "echo" || \
+             word == "head" || word == "tail" || word == "wc"
+    }
+    BEGIN {
+      s = ENVIRON["MERGE_SCRUB_INPUT"]
+      n = length(s); pos = 1; first = 1; out = ""; bad = 0; pending = 0
+      sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
+      while (pos <= n && !bad) {
+        c = substr(s, pos, 1); nx = substr(s, pos + 1, 1)
+        if (c == " " || c == "\t") { out = out c; pos++; continue }
+        if (c == "\n") {
+          out = out c; pos++; first = 1
+          # Bodies start after the opener line, in delimiter order. Inspect
+          # every command on the opener line before discarding any body.
+          for (h = 1; h <= pending && !bad; h++) {
+            found = 0
+            while (pos <= n) {
+              start = pos
+              while (pos <= n && substr(s, pos, 1) != "\n") pos++
+              line = substr(s, start, pos - start); check = line
+              if (tabs[h]) sub(/^\t+/, "", check)
+              if (!quoted[h] && (index(line, "$") || index(line, "`") || index(line, bs))) {
+                bad = 1; break
+              }
+              out = out blank(line)
+              if (pos <= n) { out = out "\n"; pos++ }
+              if (check == delim[h]) { found = 1; break }
+            }
+            if (!found) bad = 1
+          }
+          pending = 0
+          continue
+        }
+        if (c ~ /[;|&]/) { out = out c; pos++; first = 1; continue }
+        # No normalization of command words: quoted, escaped, assigned,
+        # expanded, reserved and path-qualified words all retain raw text.
+        if (first) {
+          start = pos
+          while (pos <= n && substr(s, pos, 1) ~ /[A-Za-z]/) pos++
+          word = substr(s, start, pos - start)
+          after = substr(s, pos, 1)
+          if (!allowed(word) || (after != "" && after !~ /[ \t\n;|&<>]/)) {
+            bad = 1; break
+          }
+          out = out word; first = 0; continue
+        }
+        if (c == sq || c == dq) {
+          q = c; start = pos++
+          while (pos <= n && substr(s, pos, 1) != q) {
+            c = substr(s, pos, 1)
+            if (q == dq && (c == "$" || c == "`" || c == bs)) { bad = 1; break }
+            pos++
+          }
+          if (bad || pos > n) { bad = 1; break }
+          pos++; out = out blank(substr(s, start, pos - start)); continue
+        }
+        # Reject shell execution/expansion syntax and comments conservatively.
+        if (c == bs || c == "$" || c == "`" || c == "#" || c ~ /[(){}]/) {
+          bad = 1; break
+        }
+        if (c == "<" && nx == "<") {
+          start = pos; pos += 2; strip = 0; q = ""
+          if (substr(s, pos, 1) == "-") { strip = 1; pos++ }
+          while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
+          c = substr(s, pos, 1)
+          if (c == sq || c == dq) { q = c; pos++ }
+          ds = pos
+          while (pos <= n && substr(s, pos, 1) ~ /[A-Za-z0-9_]/) pos++
+          d = substr(s, ds, pos - ds)
+          if (d == "" || (q != "" && substr(s, pos, 1) != q)) { bad = 1; break }
+          if (q != "") pos++
+          after = substr(s, pos, 1)
+          if (after != "" && after !~ /[ \t\n;|&<>]/) { bad = 1; break }
+          pending++; delim[pending] = d; quoted[pending] = (q != ""); tabs[pending] = strip
+          out = out substr(s, start, pos - start); continue
+        }
+        # Do not mistake the ampersand in a descriptor redirect for a new
+        # command. Process substitutions hit the raw fallback above.
+        if ((c == ">" || c == "<") && nx == "&") {
+          out = out c nx; pos += 2; continue
+        }
+        out = out c; pos++
+      }
+      if (pending) bad = 1
+      if (bad) printf "%s", s; else printf "%s", out
+    }
+  ' 2>/dev/null) || result="$cmd"
+  printf '%s' "${result:-$cmd}"
+}
+
 # Returns 0 if $1 looks like a merge command this gate should fire on.
 # Matches ANY of:
 #   - `gh pr merge ...`
@@ -278,6 +386,18 @@ _normalize_json_escapes() {
 #   - `glab api ... merge_requests/<N>/merge ...`             (#767, GitLab raw-API)
 #   - `tracker_pr_merge <owner/repo> <pr> ...`                (#759, wrapper)
 is_merge_command() {
+  local cmd="$1"
+  # Gates require this function. Standalone consumers still retain the raw
+  # detector if a damaged library omits it or the scrub operation fails.
+  if declare -F _scrub_merge_command >/dev/null 2>&1; then
+    cmd=$(_scrub_merge_command "$cmd") || cmd="$1"
+  fi
+  is_merge_command_raw "$cmd"
+}
+
+# Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
+# JSON quotes are transport syntax, not shell argument boundaries.
+is_merge_command_raw() {
   local cmd="$1"
   if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
     return 0

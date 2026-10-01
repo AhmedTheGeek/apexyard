@@ -233,6 +233,10 @@ for command in \
   'git -c push.default=current push' \
   'git --no-pager push origin main' \
   'git --git-dir=/some/repo/.git push origin main' \
+  'git --git-dir /some/repo/.git push origin main' \
+  'git --work-tree /some/repo push origin main' \
+  'git --namespace ns push origin main' \
+  "$(printf 'git \\\n  push origin main')" \
   '/usr/bin/git push origin main'; do
   : > "$TMP/log"
   run_json "$command"
@@ -254,7 +258,9 @@ for command in \
   'cd /some/repo && git commit -m "fix: x"' \
   'git add foo; git commit -m "fix: x"' \
   'git -C /some/repo commit -m "fix: x"' \
-  'git -c user.name=x commit -m "fix: x"'; do
+  'git -c user.name=x commit -m "fix: x"' \
+  'git --work-tree /some/repo commit -m "fix: x"' \
+  'git --git-dir /some/repo/.git commit -m "fix: x"'; do
   : > "$TMP/log"
   run_json "$command"
   for gate in check-secrets.sh validate-commit-format.sh warn-bootstrap-scope.sh; do
@@ -295,6 +301,16 @@ for command in \
     exit 1
   fi
 done
+
+# The scan does not scrub quoted data. Text that only mentions a push still
+# routes the push gates. Pin that over-match so a later change does not
+# scrub the input and lose `sh -c '...'` routing with it.
+: > "$TMP/log"
+run_json "echo 'run git push later' > notes.txt"
+[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+: > "$TMP/log"
+run_json "sh -c 'git push origin main'"
+[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
 
 # A blocking push gate still blocks when only the scan reaches it.
 : > "$TMP/log"

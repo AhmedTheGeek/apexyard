@@ -243,15 +243,27 @@ esac
 # A case glob matches only the start of the command. A push or commit that
 # follows `cd <dir> &&`, a `;`, or a git global option such as `-C <dir>`
 # missed every push and commit gate (me2resh/apexyard#1527). Scan the whole
-# command, as the merge gates do (AgDR-0162). The scan only adds routing.
-# Each gate parses the command itself, so an over-match runs a gate that
-# then passes. It cannot skip a gate. Any non-word character ends the
-# subcommand, so `git push;`, `git push&&` and `(git push)` also route.
-_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+(-[Cc][[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
-if grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$COMMAND"; then
+# command, as the merge gates do (AgDR-0162). Any non-word character ends
+# the subcommand, so `git push;`, `git push&&` and `(git push)` also route.
+#
+# The scan only adds routing, so it cannot skip a gate. It does not scrub
+# quoted data, so text that only mentions a push or commit (a heredoc body,
+# an echo, a commit message) also routes. That over-match can cause a false
+# block from a gate that refuses compound commands. A real compound commit
+# such as `git add a && git commit ...` reaches validate-commit-format.sh,
+# which refuses it, as it did before the dispatcher existed.
+#
+# Line continuations are joined first, because grep reads one line at a
+# time and `git \<newline> push` would otherwise put git and push on
+# different lines. The option list accepts `-C`, `-c` and the long options
+# that take a separate-word value, plus any `-x`, `--opt` or `--opt=value`.
+_scan_cmd=${COMMAND//$'\\\n'/ }
+_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)'
+_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
+if grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
   run_push_gates
 fi
-if grep -qE "${_git_sub_re}commit([^[:alnum:]_.-]|\$)" <<<"$COMMAND"; then
+if grep -qE "${_git_sub_re}commit([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
   run_commit_gates
 fi
 
